@@ -27,9 +27,11 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 
 ![Details](assets/details.png)
 
-### Filters and search
+### Restaurant images
 
-![Filters](assets/filters.png)
+![Restaurant image 1](assets/image1.png)
+
+![Restaurant image 2](assets/image2.png)
 
 ---
 
@@ -51,7 +53,7 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 
 ## Project Structure
 
-```
+```text
 .
 ├── App/
 │   └── app.py
@@ -64,73 +66,9 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 │   ├── skyline.png
 │   ├── map.png
 │   ├── details.png
-│   └── filters.png
+│   ├── image1.png
+│   └── image2.png
 ├── Notebooks/
 │   └── Celiac_Restaurant_Analysis.ipynb
 ├── requirements.txt
 └── README.md
-```
-
----
-
-## Installation
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/your-username/your-repo.git
-cd your-repo
-```
-
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Run the application:
-
-```bash
-streamlit run App/app.py
-```
-
----
-
-## Methodology
-
-* Reviews are processed to identify gluten-related content
-* A model assigns a safety score to each restaurant
-* Data is combined with geographic coordinates
-* Results are visualized through an interactive map
-
----
-
-## Features
-
-* Search by restaurant name
-* Filter by category
-* Filter by price
-* Geolocation support
-* Route calculation
-* Review analysis
-* Image visualization
-
----
-
-## Notes
-
-* This project is intended for educational purposes
-* Data accuracy is not guaranteed
-* No API keys are required to run the application
-
----
-
-## Author
-
-Lucía Terres
-
----
-
-## License
-
-This project is for academic and demonstration purposes.
