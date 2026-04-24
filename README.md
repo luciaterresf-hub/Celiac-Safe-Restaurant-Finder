@@ -1,6 +1,6 @@
 # Gluten-Free Restaurant Finder
 
-Machine learning project to identify gluten-free safe restaurants from customer reviews and visualize them on an interactive map.
+Find safe gluten-free restaurants in Melbourne using real customer reviews and machine learning.
 
 ---
 
