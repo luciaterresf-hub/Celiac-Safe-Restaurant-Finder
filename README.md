@@ -21,7 +21,7 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 
 ### Map view
 
-![Map](assets/image1.jpg)
+![Map](assets/image1.JPG)
 
 ### Restaurant details
 
