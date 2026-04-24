@@ -27,10 +27,6 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 
 ![Details](assets/image2.jpg)
 
-## Demo
-
-(Add your Streamlit Cloud link here)
-
 ---
 
 ## Technology Stack
