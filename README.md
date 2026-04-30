@@ -6,14 +6,14 @@ Find safe gluten-free restaurants in Melbourne using real customer reviews and m
 
 ## Overview
 
-This application helps users find gluten-free friendly restaurants in Melbourne by:
+This application helps users identify gluten-free friendly restaurants in Melbourne by:
 
-* Analyzing customer reviews
-* Estimating a safety score for each restaurant
-* Displaying results on an interactive map
-* Showing distance from the user’s location
-* Highlighting gluten-related mentions in reviews
-* Displaying restaurant images
+- Analyzing customer reviews
+- Estimating a safety score for each restaurant
+- Displaying results on an interactive map
+- Showing distance from the user’s location
+- Highlighting gluten-related mentions in reviews
+- Displaying restaurant images
 
 ---
 
@@ -29,34 +29,8 @@ This application helps users find gluten-free friendly restaurants in Melbourne 
 
 ---
 
-## Technology Stack
+## How to run
 
-* Python
-* Streamlit
-* Pandas
-* Folium
-* Machine Learning
-
----
-
-## Project Structure
-
-```text
-.
-├── App/
-│   └── app.py
-├── data/
-│   ├── restaurant_ranking.csv
-│   ├── clean_data.csv
-│   ├── raw_data.csv
-│   └── imagenes.csv
-├── assets/
-│   ├── skyline.png
-│   ├── map.png
-│   ├── details.png
-│   ├── image1.png
-│   └── image2.png
-├── Notebooks/
-│   └── Celiac_Restaurant_Analysis.ipynb
-├── requirements.txt
-└── README.md
+```bash
+pip install -r requirements.txt
+streamlit run app/streamlit_app.py
