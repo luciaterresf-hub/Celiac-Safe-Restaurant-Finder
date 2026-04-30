@@ -15,4 +15,4 @@ IMAGES_DATA_PATH = RAW_DATA_DIR / "imagenes.csv"
 
 # Output files
 CLEAN_DATA_PATH = PROCESSED_DATA_DIR / "clean_data.csv"
-RESTAURANT_RANKING_PATH = DATA_DIR / "restaurant_ranking.csv"
+RESTAURANT_RANKING_PATH = PROCESSED_DATA_DIR / "restaurant_ranking.csv"

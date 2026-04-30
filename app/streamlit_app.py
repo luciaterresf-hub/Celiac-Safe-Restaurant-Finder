@@ -537,7 +537,6 @@ def load_data():
     return df
 
 @st.cache_data
-@st.cache_data
 def load_reviews():
     try:
         df = pd.read_csv(CLEAN_DATA_PATH)
