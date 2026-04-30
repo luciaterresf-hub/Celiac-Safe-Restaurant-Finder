@@ -500,8 +500,18 @@ def candidate_file_paths(*relative_parts):
 def load_data():
     df = pd.read_csv(RESTAURANT_RANKING_PATH)
 
+    # Normalize column names to avoid issues on Streamlit Cloud
+    df.columns = [str(col).strip() for col in df.columns]
+
+    rename_map = {}
     if "lng" in df.columns and "lon" not in df.columns:
-        df = df.rename(columns={"lng": "lon"})
+        rename_map["lng"] = "lon"
+    if "longitude" in df.columns and "lon" not in df.columns:
+        rename_map["longitude"] = "lon"
+    if "latitude" in df.columns and "lat" not in df.columns:
+        rename_map["latitude"] = "lat"
+    if rename_map:
+        df = df.rename(columns=rename_map)
 
     if "title" in df.columns:
         df = df.rename(columns={"title": "restaurant_name"})
@@ -530,6 +540,10 @@ def load_data():
     for col, default in required_defaults.items():
         if col not in df.columns:
             df[col] = default
+
+    # Convert coordinates safely. If coordinates arrive as text, pandas will still handle them.
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
 
     df = df.dropna(subset=["lat", "lon"]).copy()
 
@@ -1819,25 +1833,32 @@ with col_title_2:
         st.rerun()
 
 # -------------------------
+# RESTAURANT PINS
+# -------------------------
+visible_rows = filtered_df.dropna(subset=["lat", "lon"]).head(80).copy()
+
+# -------------------------
 # MAP CENTER
 # -------------------------
 CBD_MELBOURNE = (-37.8136, 144.9631)
-center_lat = CBD_MELBOURNE[0]
-center_lon = CBD_MELBOURNE[1]
+
+if not visible_rows.empty:
+    center_lat = visible_rows["lat"].mean()
+    center_lon = visible_rows["lon"].mean()
+    zoom_start = 13
+else:
+    center_lat = CBD_MELBOURNE[0]
+    center_lon = CBD_MELBOURNE[1]
+    zoom_start = 12
 
 # -------------------------
 # CREATE MAP
 # -------------------------
 m = folium.Map(
     location=[center_lat, center_lon],
-    zoom_start=15,
+    zoom_start=zoom_start,
     tiles="CartoDB positron"
 )
-
-# -------------------------
-# RESTAURANT PINS
-# -------------------------
-visible_rows = filtered_df.dropna(subset=["lat", "lon"]).head(80).copy()
 
 
 for _, row in visible_rows.iterrows():
@@ -1864,6 +1885,10 @@ for _, row in visible_rows.iterrows():
             )
         )
     ).add_to(m)
+
+if not visible_rows.empty:
+    bounds = visible_rows[["lat", "lon"]].values.tolist()
+    m.fit_bounds(bounds, padding=(30, 30))
 
 # -------------------------
 # USER LOCATION
