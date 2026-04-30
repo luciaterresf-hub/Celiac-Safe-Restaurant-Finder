@@ -1,18 +1,26 @@
 # Python
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
 
-# Environment
-.env
-.venv
+# Entornos
 venv/
+.env
+.env.*
 
-# Mac
+# Sistema
 .DS_Store
 
-# Jupyter
-.ipynb_checkpoints
+# Datos (ignorar todo)
+data/raw/
+data/processed/
 
-# Build / dist
-build/
-dist/
+# Streamlit
+.streamlit/secrets.toml
+
+# Mantener estructura de carpetas
+!data/
+!data/raw/
+!data/processed/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
