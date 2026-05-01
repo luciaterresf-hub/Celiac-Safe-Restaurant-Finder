@@ -24,7 +24,6 @@ import streamlit as st
 import pandas as pd
 import folium
 from folium.features import DivIcon
-from folium.plugins import AntPath
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
 from branca.element import MacroElement, Template
@@ -598,35 +597,90 @@ def load_reviews():
 
 @st.cache_data
 def load_images():
+    """Load images.csv robustly.
+
+    Expected format:
+    title,imageUrls/0,imageUrls/1,imageUrls/2,...
+    """
+    candidate_paths = []
+
     try:
-        img_df = pd.read_csv(IMAGES_DATA_PATH)
+        candidate_paths.append(Path(IMAGES_DATA_PATH))
     except Exception:
+        pass
+
+    candidate_paths.extend([
+        PROJECT_ROOT / "data" / "raw" / "images.csv",
+        get_project_root() / "data" / "raw" / "images.csv",
+        Path(__file__).resolve().parent.parent / "data" / "raw" / "images.csv" if "__file__" in globals() else Path.cwd() / "data" / "raw" / "images.csv",
+        get_project_root() / "data" / "images.csv",
+        get_project_root() / "images.csv",
+        Path(__file__).resolve().parent / "data" / "images.csv" if "__file__" in globals() else Path.cwd() / "data" / "images.csv",
+        Path(__file__).resolve().parent / "images.csv" if "__file__" in globals() else Path.cwd() / "images.csv",
+        Path.cwd() / "data" / "images.csv",
+        Path.cwd() / "images.csv",
+        Path("/mnt/data/images.csv"),
+    ])
+
+    img_df = None
+    for path in candidate_paths:
+        try:
+            if path and Path(path).exists():
+                img_df = pd.read_csv(path)
+                break
+        except Exception:
+            continue
+
+    if img_df is None or img_df.empty:
         return pd.DataFrame(columns=["title", "title_norm"])
 
-    if img_df.empty:
+    img_df.columns = img_df.columns.astype(str).str.strip()
+
+    # Find title column even if it has spaces/case/BOM issues.
+    title_col = None
+    for col in img_df.columns:
+        if col.strip().lower().replace("\ufeff", "") == "title":
+            title_col = col
+            break
+
+    if title_col is None:
         return pd.DataFrame(columns=["title", "title_norm"])
 
-    if "title" not in img_df.columns:
-        return pd.DataFrame(columns=["title", "title_norm"])
+    if title_col != "title":
+        img_df = img_df.rename(columns={title_col: "title"})
 
-    img_df["title"] = img_df["title"].fillna("").astype(str)
+    img_df["title"] = img_df["title"].fillna("").astype(str).str.strip()
     img_df["title_norm"] = img_df["title"].apply(normalize_text)
 
-    # limpiar URLs vacías o inválidas
-    image_cols = [
-        col for col in img_df.columns
-        if "image" in col.lower() or "url" in col.lower()
-    ]
+    image_cols = get_image_columns(img_df)
 
     for col in image_cols:
-        img_df[col] = img_df[col].fillna("").astype(str).str.strip()
-        img_df[col] = img_df[col].replace(
-            ["nan", "None", "none", "null", "NaN"],
-            ""
+        img_df[col] = (
+            img_df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .replace(["nan", "None", "none", "null", "NaN", "<NA>"], "")
         )
 
     return img_df
 
+
+def get_image_columns(df):
+    """Return all URL columns from images.csv, including imageUrls/0 style columns."""
+    image_cols = []
+    for col in df.columns:
+        col_str = str(col).strip()
+        col_norm = col_str.lower()
+        if (
+            col_norm == "imageurl"
+            or col_norm.startswith("imageurls/")
+            or col_norm.startswith("image_urls/")
+            or (col_norm.startswith("images/") and col_norm.endswith("/imageurl"))
+            or ("image" in col_norm and "url" in col_norm)
+        ):
+            image_cols.append(col_str)
+    return image_cols
 
 def get_reviews_for_restaurant(restaurant_name, reviews_df, max_reviews=12):
     name_norm = normalize_text(restaurant_name)
@@ -694,14 +748,7 @@ def hamming_distance(hash_a, hash_b):
 
 
 def _collect_distinct_image_urls(matched_rows, max_images=8, visual_dup_threshold=8):
-    image_cols = [
-        col for col in matched_rows.columns
-        if (
-            col == "imageUrl"
-            or col.startswith("imageUrls/")
-            or (col.startswith("images/") and col.endswith("/imageUrl"))
-        )
-    ]
+    image_cols = get_image_columns(matched_rows)
 
     urls = []
 
@@ -714,10 +761,10 @@ def _collect_distinct_image_urls(matched_rows, max_images=8, visual_dup_threshol
 
             url = str(value).strip()
 
-            if not url:
+            if not url or url.lower() in {"nan", "none", "null"}:
                 continue
 
-            if not url.startswith("http"):
+            if not url.lower().startswith(("http://", "https://")):
                 continue
 
             urls.append(url)
@@ -736,25 +783,42 @@ def _collect_distinct_image_urls(matched_rows, max_images=8, visual_dup_threshol
 
     return clean_urls
 
-
 def get_images_for_restaurant(restaurant_name, images_df, max_images=8):
     name_norm = normalize_text(restaurant_name)
 
-    if not name_norm or images_df.empty:
+    if not name_norm or images_df is None or images_df.empty or "title_norm" not in images_df.columns:
         return []
 
-    matched = images_df[images_df["title_norm"] == name_norm].copy()
+    titles = images_df["title_norm"].fillna("").astype(str)
 
+    # 1) Exact normalized match.
+    matched = images_df[titles == name_norm].copy()
+
+    # 2) Match both directions for small naming differences.
     if matched.empty:
         matched = images_df[
-            images_df["title_norm"].str.contains(name_norm, na=False, regex=False)
+            titles.str.contains(name_norm, na=False, regex=False)
+            | titles.apply(lambda x: name_norm in x if isinstance(x, str) else False)
+            | titles.apply(lambda x: x in name_norm if isinstance(x, str) and x else False)
         ].copy()
+
+    # 3) Token fallback: useful for apostrophes/accents or slightly different names.
+    if matched.empty:
+        name_tokens = {t for t in name_norm.split() if len(t) >= 3}
+        if name_tokens:
+            def token_score(title):
+                title_tokens = {t for t in str(title).split() if len(t) >= 3}
+                return len(name_tokens & title_tokens)
+
+            scored = images_df.copy()
+            scored["_image_match_score"] = scored["title_norm"].apply(token_score)
+            matched = scored[scored["_image_match_score"] >= max(1, min(2, len(name_tokens)))].copy()
+            matched = matched.sort_values("_image_match_score", ascending=False)
 
     if matched.empty:
         return []
 
     return _collect_distinct_image_urls(matched, max_images=max_images)
-
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     phi1 = math.radians(lat1)
@@ -764,34 +828,6 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
-
-def get_route(lat1, lon1, lat2, lon2, mode="driving"):
-    mode = "foot" if str(mode).lower() in ["foot", "walking", "walk"] else "driving"
-    url = (
-        f"https://router.project-osrm.org/route/v1/{mode}/"
-        f"{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson"
-    )
-
-    try:
-        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(request, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-
-        routes = data.get("routes", [])
-        if not routes:
-            return None, None, None
-
-        route = routes[0]
-        coords = route.get("geometry", {}).get("coordinates", [])
-        if not coords:
-            return None, None, None
-
-        latlon_coords = [(coord[1], coord[0]) for coord in coords]
-        distance_km = route.get("distance", 0) / 1000
-        duration_min = route.get("duration", 0) / 60
-        return latlon_coords, distance_km, duration_min
-    except Exception:
-        return None, None, None
 
 def build_restaurant_url(row_id):
     return f"/?restaurant={urllib.parse.quote(str(row_id))}"
@@ -910,23 +946,7 @@ def render_safety_badge_html(value):
     """
 
 def get_popup_images_for_restaurant(restaurant_name, images_df, max_images=3):
-    name_norm = normalize_text(restaurant_name)
-
-    if not name_norm or images_df is None or images_df.empty:
-        return []
-
-    matched = images_df[images_df["title_norm"] == name_norm].copy()
-
-    if matched.empty:
-        matched = images_df[
-            images_df["title_norm"].str.contains(name_norm, na=False, regex=False)
-        ].copy()
-
-    if matched.empty:
-        return []
-
-    return _collect_distinct_image_urls(matched, max_images=max_images)
-
+    return get_images_for_restaurant(restaurant_name, images_df, max_images=max_images)
 
 def build_popup_html(row, images_df=None):
     name = html.escape(str(row.get("restaurant_name", "")))
@@ -1227,16 +1247,6 @@ if "last_category" not in st.session_state:
 if "selected_category_label" not in st.session_state:
     st.session_state.selected_category_label = "All"
 
-if "route_target" not in st.session_state:
-    st.session_state.route_target = None
-
-if "route_mode" not in st.session_state:
-    st.session_state.route_mode = "driving"
-
-if "route_summary" not in st.session_state:
-    st.session_state.route_summary = None
-
-
 # -------------------------
 # GEOLOCATION
 # -------------------------
@@ -1453,40 +1463,7 @@ if restaurant_page is not None:
                 st.info("No photos found for this restaurant.")
 
             if pd.notnull(r.get("lat")) and pd.notnull(r.get("lon")):
-                st.subheader("Directions")
-
-                if location:
-                    dir_col1, dir_col2, dir_col3 = st.columns(3)
-
-                    with dir_col1:
-                        if st.button("🚗", use_container_width=True, key=f"restaurant_drive_{restaurant_page}"):
-                            st.session_state.route_target = {
-                                "lat": float(r["lat"]),
-                                "lon": float(r["lon"]),
-                                "name": str(r.get("restaurant_name", "")),
-                            }
-                            st.session_state.route_mode = "driving"
-                            st.session_state.route_summary = None
-                            st.rerun()
-
-                    with dir_col2:
-                        if st.button("🚶", use_container_width=True, key=f"restaurant_walk_{restaurant_page}"):
-                            st.session_state.route_target = {
-                                "lat": float(r["lat"]),
-                                "lon": float(r["lon"]),
-                                "name": str(r.get("restaurant_name", "")),
-                            }
-                            st.session_state.route_mode = "foot"
-                            st.session_state.route_summary = None
-                            st.rerun()
-
-                    with dir_col3:
-                        if st.button("✖️", use_container_width=True, key=f"restaurant_clear_{restaurant_page}"):
-                            st.session_state.route_target = None
-                            st.session_state.route_summary = None
-                            st.rerun()
-                else:
-                    st.info("Enable location to get directions.")
+                st.subheader("Map")
 
                 restaurant_map = folium.Map(
                     location=[r["lat"], r["lon"]],
@@ -1513,86 +1490,11 @@ if restaurant_page is not None:
                     )
                 ).add_to(restaurant_map)
 
-                if location:
-                    folium.Circle(
-                        location=[location["latitude"], location["longitude"]],
-                        radius=60,
-                        color=None,
-                        fill=True,
-                        fill_color="#007aff",
-                        fill_opacity=0.18
-                    ).add_to(restaurant_map)
-
-                    folium.CircleMarker(
-                        location=[location["latitude"], location["longitude"]],
-                        radius=7,
-                        color="#ffffff",
-                        weight=2,
-                        fill=True,
-                        fill_color="#007aff",
-                        fill_opacity=1
-                    ).add_to(restaurant_map)
-
-                    target = st.session_state.route_target
-                    if target is not None:
-                        target_matches_current = (
-                            abs(float(target["lat"]) - float(r["lat"])) < 0.000001
-                            and abs(float(target["lon"]) - float(r["lon"])) < 0.000001
-                        )
-
-                        if target_matches_current:
-                            route_coords, route_distance_km, route_duration_min = get_route(
-                                location["latitude"],
-                                location["longitude"],
-                                float(target["lat"]),
-                                float(target["lon"]),
-                                st.session_state.route_mode,
-                            )
-
-                            if route_coords and route_distance_km is not None:
-                                if st.session_state.route_mode == "foot":
-                                    route_duration_min = (route_distance_km / 4.5) * 60
-                                else:
-                                    route_duration_min = (route_distance_km / 22) * 60
-
-                                AntPath(
-                                    locations=route_coords,
-                                    color="#007aff",
-                                    pulse_color="#7fb7ff",
-                                    weight=6,
-                                    delay=800,
-                                    dash_array=[16, 24]
-                                ).add_to(restaurant_map)
-                                restaurant_map.fit_bounds(route_coords, padding=(30, 30))
-
-                                st.session_state.route_summary = {
-                                    "distance_km": route_distance_km,
-                                    "duration_min": route_duration_min,
-                                    "mode": st.session_state.route_mode,
-                                    "name": target.get("name", "Destination"),
-                                }
-                            else:
-                                st.session_state.route_summary = {
-                                    "error": "Route unavailable",
-                                    "mode": st.session_state.route_mode,
-                                    "name": target.get("name", "Destination"),
-                                }
-
-                route_summary = st.session_state.route_summary
-                if route_summary and route_summary.get("name") == str(r.get("restaurant_name", "")):
-                    if route_summary.get("error"):
-                        st.warning("Route unavailable right now.")
-                    else:
-                        mode_label = "Drive" if route_summary.get("mode") == "driving" else "Walk"
-                        st.info(
-                            f"{mode_label} route: {route_summary['distance_km']:.2f} km · {route_summary['duration_min']:.0f} min"
-                        )
-
                 st_folium(
                     restaurant_map,
                     height=500,
                     use_container_width=True,
-                    key=f"restaurant_map_{restaurant_page}_{st.session_state.route_mode}_{'route' if st.session_state.route_target else 'noroute'}"
+                    key=f"restaurant_map_{restaurant_page}"
                 )
 
         with col2:
