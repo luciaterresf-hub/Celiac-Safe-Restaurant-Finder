@@ -464,6 +464,25 @@ def find_category_column(df):
     return None
 
 
+def find_coordinate_column(df, names):
+    normalized = {str(col).strip().lower(): col for col in df.columns}
+    for name in names:
+        if name.lower() in normalized:
+            return normalized[name.lower()]
+    return None
+
+
+def clean_coordinate_series(series):
+    return pd.to_numeric(
+        series
+        .astype(str)
+        .str.strip()
+        .str.replace(",", ".", regex=False)
+        .str.replace("−", "-", regex=False),
+        errors="coerce"
+    )
+
+
 
 def get_project_root():
     app_dir = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
@@ -499,15 +518,22 @@ def candidate_file_paths(*relative_parts):
 @st.cache_data
 def load_data():
     df = pd.read_csv(RESTAURANT_RANKING_PATH)
+    df.columns = df.columns.astype(str).str.strip()
 
-    if "lng" in df.columns and "lon" not in df.columns:
-        df = df.rename(columns={"lng": "lon"})
+    lat_col = find_coordinate_column(df, ["lat", "latitude"])
+    lon_col = find_coordinate_column(df, ["lng", "lon", "longitude"])
+
+    if lat_col is not None and lat_col != "lat":
+        df = df.rename(columns={lat_col: "lat"})
+
+    if lon_col is not None and lon_col != "lon":
+        df = df.rename(columns={lon_col: "lon"})
 
     # Ensure coordinates are numeric so Folium can plot the markers correctly
     if "lat" in df.columns:
-        df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+        df["lat"] = clean_coordinate_series(df["lat"])
     if "lon" in df.columns:
-        df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+        df["lon"] = clean_coordinate_series(df["lon"])
 
     if "title" in df.columns:
         df = df.rename(columns={"title": "restaurant_name"})
@@ -1760,7 +1786,7 @@ if selected_category_value is not None:
     else:
         if category_col in filtered_df.columns:
             filtered_df = filtered_df[
-                filtered_df[category_col].fillna("") == selected_category_value
+                filtered_df[category_col].fillna("").astype(str).str.strip().str.lower() == selected_category_value.strip().lower()
             ].copy()
         else:
             filtered_df = df.iloc[0:0].copy()
@@ -1844,6 +1870,9 @@ m = folium.Map(
 # RESTAURANT PINS
 # -------------------------
 visible_rows = filtered_df.dropna(subset=["lat", "lon"]).head(80).copy()
+visible_rows["lat"] = pd.to_numeric(visible_rows["lat"], errors="coerce")
+visible_rows["lon"] = pd.to_numeric(visible_rows["lon"], errors="coerce")
+visible_rows = visible_rows.dropna(subset=["lat", "lon"]).copy()
 
 
 for _, row in visible_rows.iterrows():
@@ -1854,7 +1883,7 @@ for _, row in visible_rows.iterrows():
     style = get_marker_style(row, active=is_active)
 
     folium.Marker(
-        location=[row["lat"], row["lon"]],
+        location=[float(row["lat"]), float(row["lon"])],
         tooltip=row_id,
         popup=folium.Popup(popup_html, max_width=320),
         icon=DivIcon(
