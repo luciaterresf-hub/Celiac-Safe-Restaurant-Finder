@@ -464,25 +464,6 @@ def find_category_column(df):
     return None
 
 
-def find_coordinate_column(df, names):
-    normalized = {str(col).strip().lower(): col for col in df.columns}
-    for name in names:
-        if name.lower() in normalized:
-            return normalized[name.lower()]
-    return None
-
-
-def clean_coordinate_series(series):
-    return pd.to_numeric(
-        series
-        .astype(str)
-        .str.strip()
-        .str.replace(",", ".", regex=False)
-        .str.replace("−", "-", regex=False),
-        errors="coerce"
-    )
-
-
 
 def get_project_root():
     app_dir = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
@@ -518,22 +499,29 @@ def candidate_file_paths(*relative_parts):
 @st.cache_data
 def load_data():
     df = pd.read_csv(RESTAURANT_RANKING_PATH)
-    df.columns = df.columns.astype(str).str.strip()
 
-    lat_col = find_coordinate_column(df, ["lat", "latitude"])
-    lon_col = find_coordinate_column(df, ["lng", "lon", "longitude"])
+    df.columns = df.columns.str.strip()
 
-    if lat_col is not None and lat_col != "lat":
-        df = df.rename(columns={lat_col: "lat"})
+    # The CSV uses lat + lng. Keep lng, and create lon as an alias
+    # because the rest of the app uses lon in several places.
+    if "lng" in df.columns:
+        df["lng"] = (
+            df["lng"]
+            .astype(str)
+            .str.strip()
+            .str.replace(",", ".", regex=False)
+        )
+        df["lng"] = pd.to_numeric(df["lng"], errors="coerce")
+        df["lon"] = df["lng"]
 
-    if lon_col is not None and lon_col != "lon":
-        df = df.rename(columns={lon_col: "lon"})
-
-    # Ensure coordinates are numeric so Folium can plot the markers correctly
     if "lat" in df.columns:
-        df["lat"] = clean_coordinate_series(df["lat"])
-    if "lon" in df.columns:
-        df["lon"] = clean_coordinate_series(df["lon"])
+        df["lat"] = (
+            df["lat"]
+            .astype(str)
+            .str.strip()
+            .str.replace(",", ".", regex=False)
+        )
+        df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
 
     if "title" in df.columns:
         df = df.rename(columns={"title": "restaurant_name"})
@@ -1786,7 +1774,7 @@ if selected_category_value is not None:
     else:
         if category_col in filtered_df.columns:
             filtered_df = filtered_df[
-                filtered_df[category_col].fillna("").astype(str).str.strip().str.lower() == selected_category_value.strip().lower()
+                filtered_df[category_col].fillna("") == selected_category_value
             ].copy()
         else:
             filtered_df = df.iloc[0:0].copy()
@@ -1869,17 +1857,26 @@ m = folium.Map(
 # -------------------------
 # RESTAURANT PINS
 # -------------------------
+# IMPORTANTE: usamos lon, no lng, porque load_data() crea lon desde lng
+# y el resto de la app/rutas trabajan con lon.
 visible_rows = filtered_df.dropna(subset=["lat", "lon"]).head(80).copy()
-visible_rows["lat"] = pd.to_numeric(visible_rows["lat"], errors="coerce")
-visible_rows["lon"] = pd.to_numeric(visible_rows["lon"], errors="coerce")
-visible_rows = visible_rows.dropna(subset=["lat", "lon"]).copy()
 
+# Limpieza extra por si alguna coordenada llega como texto
+visible_rows["lat"] = pd.to_numeric(
+    visible_rows["lat"].astype(str).str.strip().str.replace(",", ".", regex=False),
+    errors="coerce"
+)
+visible_rows["lon"] = pd.to_numeric(
+    visible_rows["lon"].astype(str).str.strip().str.replace(",", ".", regex=False),
+    errors="coerce"
+)
+visible_rows = visible_rows.dropna(subset=["lat", "lon"]).copy()
 
 for _, row in visible_rows.iterrows():
     popup_html = build_popup_html(row, images_df)
     hover_text = build_hover_text(row)
     row_id = str(row["row_id"])
-    is_active = row_id == st.session_state.selected_id
+    is_active = row_id == str(st.session_state.selected_id)
     style = get_marker_style(row, active=is_active)
 
     folium.Marker(
@@ -1899,6 +1896,11 @@ for _, row in visible_rows.iterrows():
             )
         )
     ).add_to(m)
+
+# Ajusta el mapa a los pines solo si no hay ubicación de usuario.
+# Así no rompe las rutas ni el centrado cuando hay geolocalización.
+if location is None and not visible_rows.empty:
+    m.fit_bounds(visible_rows[["lat", "lon"]].values.tolist(), padding=(30, 30))
 
 # -------------------------
 # USER LOCATION
@@ -1926,7 +1928,7 @@ if location:
 # -------------------------
 # MAP
 # -------------------------
-map_state_key = f"main_map_{normalize_text(search)}_{selected_category_label}_{selected_price_value}_{len(filtered_df)}"
+map_state_key = f"main_map_pins_v3_{normalize_text(search)}_{selected_category_label}_{selected_price_value}_{len(filtered_df)}_{len(visible_rows)}"
 
 st_folium(
     m,
