@@ -1,5 +1,7 @@
 # Gluten-Free Restaurant Finder
 
+**Live App:** https://tu-app.streamlit.app
+
 Find safe gluten-free restaurants in Melbourne using real customer reviews and machine learning.
 
 ---
