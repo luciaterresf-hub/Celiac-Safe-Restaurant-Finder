@@ -2,7 +2,7 @@
 
 **Live App:** https://celiac-safe-restaurant-finder-fjrfgs4st227sptmy5h5yj.streamlit.app/
 
-Find safe gluten-free restaurants in Melbourne using real customer reviews and machine learning.
+Find safe gluten-free restaurants in Melbourne using data analysis and NLP techniques
 
 ---
 
@@ -19,10 +19,11 @@ This application helps users identify gluten-free friendly restaurants in Melbou
 ---
 ## Methodology
 
-- Reviews are filtered for gluten-related keywords
+- Reviews are filtered using gluten-related keywords (e.g. "gluten-free", "celiac", "GF")
+- Text is normalized to ensure consistent matching
 - Restaurants are scored based on:
-  - Number of safe vs unsafe mentions
-  - Frequency of gluten-related terms
+  - Ratio of safe vs unsafe mentions
+  - Frequency of gluten-related signals
 - A ranking score is computed to prioritize safer restaurants
   
 ---
@@ -32,6 +33,13 @@ This application helps users identify gluten-free friendly restaurants in Melbou
 - Keyword-based classification of reviews
 - Detection of gluten-related risk signals
   
+---
+## Results
+
+- Processed X restaurants and X reviews
+- Built a data-driven safety scoring system based on user-generated content
+- Identified top gluten-safe restaurants in Melbourne
+
 ---
 ## Application Preview
 
