@@ -24,6 +24,15 @@ This application helps users identify gluten-free friendly restaurants in Melbou
   - Number of safe vs unsafe mentions
   - Frequency of gluten-related terms
 - A ranking score is computed to prioritize safer restaurants
+  
+---
+## NLP Component
+
+- Text normalization and preprocessing
+- Keyword-based classification of reviews
+- Detection of gluten-related risk signals
+  
+---
 ## Application Preview
 
 ### Map view
