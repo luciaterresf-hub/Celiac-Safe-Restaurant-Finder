@@ -17,7 +17,13 @@ This application helps users identify gluten-free friendly restaurants in Melbou
 - Displaying restaurant images
 
 ---
+## Methodology
 
+- Reviews are filtered for gluten-related keywords
+- Restaurants are scored based on:
+  - Number of safe vs unsafe mentions
+  - Frequency of gluten-related terms
+- A ranking score is computed to prioritize safer restaurants
 ## Application Preview
 
 ### Map view
