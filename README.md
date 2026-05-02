@@ -13,7 +13,6 @@ This application helps users identify gluten-free friendly restaurants in Melbou
 - Analyzing customer reviews
 - Estimating a safety score for each restaurant
 - Displaying results on an interactive map
-- Showing distance from the user’s location
 - Highlighting gluten-related mentions in reviews
 - Displaying restaurant images
 
